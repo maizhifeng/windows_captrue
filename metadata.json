@@ -1,0 +1,7 @@
+{
+  "name": "AI Vision Monitoring Panel",
+  "description": "An application that captures a target window's screen and uses AI to provide real-time analysis of its content.",
+  "requestFramePermissions": [
+    "display-capture"
+  ]
+}
