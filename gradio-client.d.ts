@@ -22,3 +22,20 @@ declare module '@gradio/client' {
     predict(endpoint: string, payload: any): Promise<any>;
   }
 }
+
+// Minimal types for Google Identity Services (GSI) client, loaded via CDN
+declare var google: {
+    accounts: {
+        id: any;
+        oauth2: {
+            initTokenClient: (config: {
+                client_id: string;
+                scope: string;
+                callback: (tokenResponse: any) => void;
+            }) => {
+                requestAccessToken: (overrideConfig?: any) => void;
+            };
+            revoke: (token: string, callback: () => void) => void;
+        };
+    };
+};

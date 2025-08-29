@@ -1,5 +1,3 @@
-
-
 import React from 'react';
 import DetectionResults from './DetectionResults.tsx';
 import AnalysisControls from './AnalysisControls.tsx';
@@ -46,7 +44,7 @@ const LiveAnalysisStudio: React.FC<LiveAnalysisStudioProps> = (props) => {
             </div>
 
             {/* Bottom bar: All controls and configuration */}
-            <div className="flex-shrink-0 pt-4 mt-4 border-t border-zinc-700">
+            <div className="flex-shrink-0 pt-4 mt-4 border-t border-zinc-200 dark:border-zinc-700">
                 <AnalysisControls {...props} />
             </div>
         </div>

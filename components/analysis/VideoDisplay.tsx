@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { SpinnerIcon } from '../icons/SpinnerIcon.tsx';
 import { EyeIcon } from '../icons/EyeIcon.tsx';
@@ -85,7 +84,9 @@ const VideoDisplay: React.FC<VideoDisplayProps> = ({ videoRef, isCapturing, isAn
 
         // 使用 ResizeObserver 监听容器尺寸变化
         const resizeObserver = new ResizeObserver(updateDimensions);
-        resizeObserver.observe(video.parentElement!);
+        if (video.parentElement) {
+            resizeObserver.observe(video.parentElement);
+        }
         
         // 初始计算
         if (video.readyState >= 2) updateDimensions();
@@ -98,7 +99,7 @@ const VideoDisplay: React.FC<VideoDisplayProps> = ({ videoRef, isCapturing, isAn
     }, [isCapturing, videoRef]);
 
     return (
-        <div className="relative w-full h-full bg-black rounded-lg overflow-hidden border border-zinc-800 flex items-center justify-center">
+        <div className="relative w-full h-full bg-zinc-100 dark:bg-zinc-800 rounded-lg overflow-hidden border border-zinc-200/80 dark:border-zinc-700 flex items-center justify-center">
             <video
                 ref={videoRef}
                 className="w-full h-full object-contain transition-opacity duration-500"
@@ -108,12 +109,12 @@ const VideoDisplay: React.FC<VideoDisplayProps> = ({ videoRef, isCapturing, isAn
 
             {/* 未捕获时的占位符 */}
             {!isCapturing && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center text-zinc-400 p-4 z-10">
-                    <EyeIcon className="h-12 w-12 mb-4 text-zinc-500"/>
-                    <p className="font-semibold text-lg text-zinc-300">
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-zinc-500 dark:text-zinc-400 p-4 z-10">
+                    <EyeIcon className="h-12 w-12 mb-4 text-zinc-400 dark:text-zinc-500"/>
+                    <p className="font-semibold text-lg text-zinc-700 dark:text-zinc-200">
                         开始捕获以进行监控
                     </p>
-                    <p className="text-sm text-zinc-500 mt-1">选择一个游戏或应用程序窗口以开始。</p>
+                    <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">选择一个游戏或应用程序窗口以开始。</p>
                 </div>
             )}
             
@@ -136,7 +137,7 @@ const VideoDisplay: React.FC<VideoDisplayProps> = ({ videoRef, isCapturing, isAn
                         return (
                             <div
                                 key={index}
-                                className="absolute border-2 rounded-sm"
+                                className="absolute border-2 rounded-sm shadow-lg"
                                 style={{
                                     left: `${boxX}px`, top: `${boxY}px`,
                                     width: `${boxWidth}px`, height: `${boxHeight}px`,
@@ -159,9 +160,9 @@ const VideoDisplay: React.FC<VideoDisplayProps> = ({ videoRef, isCapturing, isAn
             )}
 
             {/* "分析中..." 指示器 */}
-            <div className={`absolute top-4 right-4 flex items-center gap-2 bg-zinc-900/90 backdrop-blur-sm px-3 py-1.5 rounded-full transition-opacity duration-300 pointer-events-none ${isCapturing && isAnalyzing ? 'opacity-100' : 'opacity-0'}`}>
+            <div className={`absolute top-4 right-4 flex items-center gap-2 bg-zinc-50/80 dark:bg-zinc-900/70 backdrop-blur-sm px-3 py-1.5 rounded-full transition-opacity duration-300 pointer-events-none shadow-md ${isCapturing && isAnalyzing ? 'opacity-100' : 'opacity-0'}`}>
                 <SpinnerIcon />
-                <span className="text-sm font-medium text-zinc-300">分析中...</span>
+                <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">分析中...</span>
             </div>
         </div>
     );

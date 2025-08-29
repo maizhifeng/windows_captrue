@@ -19,6 +19,7 @@ const AnnotationView: React.FC<AnnotationViewProps> = ({ onFrameCaptured, onAuto
     const [isAutoCapturing, setIsAutoCapturing] = useState(false); // 是否启用了自动捕获
     const [autoCaptureInterval, setAutoCaptureInterval] = useState(1.5); // 自动捕获的冷却时间（秒）
     const [autoCaptureConfidence, setAutoCaptureConfidence] = useState(0.75); // 自动捕获的置信度阈值
+    const [autoCaptureMaxSize, setAutoCaptureMaxSize] = useState(0.3); // 自动捕获的最大对象尺寸
     const [showCaptureFlash, setShowCaptureFlash] = useState(false); // 控制捕获时的闪烁效果
     const [captureMode, setCaptureMode] = useState<'manual' | 'auto'>('manual'); // 当前捕获模式
     const [isDetecting, setIsDetecting] = useState(false); // 自动捕获是否正在检测当前帧
@@ -56,7 +57,10 @@ const AnnotationView: React.FC<AnnotationViewProps> = ({ onFrameCaptured, onAuto
     
     // 加载 COCO-SSD 模型
     useEffect(() => {
-        async function loadModel() {
+        const MAX_RETRIES = 10;
+        let attempt = 0;
+        
+        async function loadModelWithRetry() {
             if (typeof cocoSsd !== 'undefined' && cocoSsd.load) {
                 try {
                     const model = await cocoSsd.load();
@@ -68,11 +72,17 @@ const AnnotationView: React.FC<AnnotationViewProps> = ({ onFrameCaptured, onAuto
                     setIsModelLoading(false);
                 }
             } else {
-                setError("对象检测库未找到。");
-                setIsModelLoading(false);
+                attempt++;
+                if (attempt < MAX_RETRIES) {
+                    setTimeout(loadModelWithRetry, 500); // 重试
+                } else {
+                    setError("对象检测库加载超时。请刷新页面重试。");
+                    setIsModelLoading(false);
+                }
             }
         }
-        loadModel();
+        
+        loadModelWithRetry();
     }, []);
 
 
@@ -104,6 +114,7 @@ const AnnotationView: React.FC<AnnotationViewProps> = ({ onFrameCaptured, onAuto
         
         const tempCanvas = document.createElement('canvas');
         tempCanvas.width = video.videoWidth; tempCanvas.height = video.videoHeight;
+        const { width: imageWidth, height: imageHeight } = tempCanvas;
         const ctx = tempCanvas.getContext('2d');
         if (!ctx) return;
         ctx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
@@ -112,8 +123,19 @@ const AnnotationView: React.FC<AnnotationViewProps> = ({ onFrameCaptured, onAuto
         try {
             // 使用浏览器内的 COCO-SSD 模型进行检测
             const predictions = await cocoModel.detect(tempCanvas);
-            // 如果检测到任何高于阈值的对象
-            if (predictions.some((p: any) => p.score > autoCaptureConfidence)) {
+            
+            const imageArea = imageWidth * imageHeight;
+            // 按置信度和尺寸过滤预测结果
+            const validPredictions = predictions.filter((p: any) => {
+                if (p.score < autoCaptureConfidence) return false;
+                const [_x, _y, w, h] = p.bbox;
+                const boxArea = w * h;
+                // 检查框面积是否小于最大尺寸阈值
+                return (boxArea / imageArea) <= autoCaptureMaxSize;
+            });
+
+            // 如果有任何有效的预测结果
+            if (validPredictions.length > 0) {
                 lastAutoCaptureTimeRef.current = performance.now();
                 // 将捕获的帧传递给父组件
                 onAutoCapturedFrame(ctx.getImageData(0, 0, tempCanvas.width, tempCanvas.height));
@@ -128,7 +150,7 @@ const AnnotationView: React.FC<AnnotationViewProps> = ({ onFrameCaptured, onAuto
             setIsDetecting(false);
         }
 
-    }, [onAutoCapturedFrame, autoCaptureConfidence, autoCaptureInterval, isDetecting, cocoModel]);
+    }, [onAutoCapturedFrame, autoCaptureConfidence, autoCaptureInterval, isDetecting, cocoModel, autoCaptureMaxSize]);
 
     // 设置和清除自动捕获的定时器
     useEffect(() => {
@@ -138,39 +160,39 @@ const AnnotationView: React.FC<AnnotationViewProps> = ({ onFrameCaptured, onAuto
     }, [isAutoCapturing, runAutoCaptureFrame]);
 
     return (
-        <div className="space-y-4 bg-zinc-900 p-4 rounded-lg border border-zinc-800 h-full flex flex-col">
+        <div className="space-y-4 bg-zinc-50 dark:bg-zinc-900 p-4 rounded-lg border border-zinc-200/80 dark:border-zinc-800 h-full flex flex-col">
             {/* 视频预览区域 */}
-            <div className="relative aspect-video bg-black rounded-md overflow-hidden border border-zinc-700 flex items-center justify-center flex-shrink-0">
+            <div className="relative aspect-video bg-zinc-100 dark:bg-zinc-800 rounded-md overflow-hidden border border-zinc-200 dark:border-zinc-700 flex items-center justify-center flex-shrink-0">
                 <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-contain" />
-                <div className={`absolute inset-0 border-4 border-green-500 rounded-md pointer-events-none transition-opacity duration-300 z-10 ${showCaptureFlash ? 'opacity-100' : 'opacity-0'}`}></div>
+                <div className={`absolute inset-0 border-4 border-blue-500 rounded-md pointer-events-none transition-opacity duration-300 z-10 ${showCaptureFlash ? 'opacity-100' : 'opacity-0'}`}></div>
                 {!isCapturing && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center text-zinc-400 p-4 text-center">
-                        <CameraIcon className="h-10 w-10 mb-2 text-zinc-500"/>
-                        <p className="font-semibold text-zinc-300">开始屏幕共享</p>
-                        <p className="text-sm text-zinc-500">选择一个窗口以收集数据。</p>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center text-zinc-500 dark:text-zinc-400 p-4 text-center">
+                        <CameraIcon className="h-10 w-10 mb-2 text-zinc-400 dark:text-zinc-500"/>
+                        <p className="font-semibold text-zinc-700 dark:text-zinc-200">开始屏幕共享</p>
+                        <p className="text-sm text-zinc-500 dark:text-zinc-400">选择一个窗口以收集数据。</p>
                     </div>
                 )}
-                {error && <div className="absolute bottom-4 left-4 right-4 bg-red-900/80 border border-red-700 text-red-300 p-3 rounded-lg text-sm text-center" role="alert">{error}</div>}
+                {error && <div className="absolute bottom-4 left-4 right-4 bg-red-50/80 dark:bg-red-900/30 border border-red-200 dark:border-red-500/50 text-red-800 dark:text-red-300 p-3 rounded-lg text-sm text-center" role="alert">{error}</div>}
             </div>
             
             <div className="space-y-4 flex-grow flex flex-col">
-                <button onClick={isCapturing ? stopCapture : startCapture} className={`px-4 py-2.5 font-semibold rounded-lg shadow-md w-full disabled:bg-slate-600 disabled:cursor-not-allowed text-base transition-colors text-white ${ isCapturing ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'}`}>
+                <button onClick={isCapturing ? stopCapture : startCapture} className={`px-4 py-2.5 font-semibold rounded-lg shadow-sm w-full disabled:bg-slate-600 disabled:cursor-not-allowed text-base transition-colors text-white ${ isCapturing ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'}`}>
                     {isCapturing ? '停止屏幕共享' : '开始屏幕共享'}
                 </button>
                 
                 {/* 仅在屏幕共享时显示捕获选项 */}
                 {isCapturing && (
-                    <div className="bg-zinc-800/50 rounded-lg border border-zinc-700 flex-grow flex flex-col">
-                        <div className="flex p-1 bg-zinc-800 rounded-t-lg">
-                            <button onClick={() => setCaptureMode('manual')} disabled={isAutoCapturing} className={`flex-1 px-4 py-2 text-sm font-semibold text-center transition-colors rounded-md disabled:opacity-50 ${captureMode === 'manual' ? 'bg-zinc-700 text-blue-300' : 'text-zinc-400 hover:bg-zinc-700/50'}`}>手动捕获</button>
-                            <button onClick={() => setCaptureMode('auto')} disabled={isAutoCapturing || isModelLoading || !cocoModel} className={`flex-1 px-4 py-2 text-sm font-semibold text-center transition-colors rounded-md disabled:opacity-50 ${captureMode === 'auto' ? 'bg-zinc-700 text-blue-300' : 'text-zinc-400 hover:bg-zinc-700/50'}`}>自动捕获</button>
+                    <div className="bg-zinc-50 dark:bg-zinc-800/50 rounded-lg border border-zinc-200 dark:border-zinc-700 flex-grow flex flex-col">
+                        <div className="flex p-1 bg-zinc-100 dark:bg-zinc-800 rounded-t-lg border-b border-zinc-200 dark:border-zinc-700">
+                            <button onClick={() => setCaptureMode('manual')} disabled={isAutoCapturing} className={`flex-1 px-4 py-1.5 text-sm font-semibold text-center transition-colors rounded-md disabled:opacity-50 ${captureMode === 'manual' ? 'bg-white dark:bg-zinc-700 text-blue-600 dark:text-zinc-100 shadow-sm' : 'text-zinc-600 dark:text-zinc-300 hover:bg-white/60 dark:hover:bg-zinc-700/60'}`}>手动捕获</button>
+                            <button onClick={() => setCaptureMode('auto')} disabled={isAutoCapturing || isModelLoading} className={`flex-1 px-4 py-1.5 text-sm font-semibold text-center transition-colors rounded-md disabled:opacity-50 ${captureMode === 'auto' ? 'bg-white dark:bg-zinc-700 text-blue-600 dark:text-zinc-100 shadow-sm' : 'text-zinc-600 dark:text-zinc-300 hover:bg-white/60 dark:hover:bg-zinc-700/60'}`}>自动捕获</button>
                         </div>
 
                         <div className="p-4 flex-grow">
                             {captureMode === 'manual' && (
                                 <div className="space-y-3 flex flex-col h-full justify-center">
-                                    <p className="text-sm text-zinc-400 text-center">单击下面的按钮以从视频流中捕获当前帧进行标注。</p>
-                                    <button onClick={captureFrame} disabled={isAutoCapturing} className="px-4 py-2 font-semibold rounded-lg shadow-md bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center gap-2 disabled:bg-slate-600 w-full">
+                                    <p className="text-sm text-zinc-500 dark:text-zinc-400 text-center">单击下面的按钮以从视频流中捕获当前帧进行标注。</p>
+                                    <button onClick={captureFrame} disabled={isAutoCapturing} className="px-4 py-2 font-semibold rounded-lg shadow-sm bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center gap-2 disabled:bg-slate-600 w-full">
                                         <CameraIcon className="h-5 w-5"/> 捕获帧
                                     </button>
                                 </div>
@@ -178,19 +200,23 @@ const AnnotationView: React.FC<AnnotationViewProps> = ({ onFrameCaptured, onAuto
                             {captureMode === 'auto' && (
                                 <div className="space-y-4">
                                     {isModelLoading ? (
-                                        <div className="flex items-center justify-center text-zinc-400 gap-2"><SpinnerIcon/><span>加载模型...</span></div>
+                                        <div className="flex items-center justify-center text-zinc-500 dark:text-zinc-400 gap-2"><SpinnerIcon/><span>加载模型...</span></div>
                                     ) : (
                                     <>
-                                        <p className="text-sm text-zinc-400">当通用模型检测到任何对象时，自动捕获帧。</p>
+                                        <p className="text-sm text-zinc-500 dark:text-zinc-400">当通用模型检测到任何对象时，自动捕获帧。</p>
                                         <div>
-                                            <label htmlFor="confidence-slider" className="flex justify-between text-sm font-medium text-zinc-300 mb-1"><span>置信度</span><span>{Math.round(autoCaptureConfidence * 100)}%</span></label>
-                                            <input id="confidence-slider" type="range" min="0.2" max="0.9" step="0.05" value={autoCaptureConfidence} onChange={(e) => setAutoCaptureConfidence(parseFloat(e.target.value))} disabled={isAutoCapturing} className="w-full h-2 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-blue-500 disabled:opacity-50"/>
+                                            <label htmlFor="confidence-slider" className="flex justify-between text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1"><span>置信度</span><span className="font-mono">{Math.round(autoCaptureConfidence * 100)}%</span></label>
+                                            <input id="confidence-slider" type="range" min="0.2" max="0.9" step="0.05" value={autoCaptureConfidence} onChange={(e) => setAutoCaptureConfidence(parseFloat(e.target.value))} disabled={isAutoCapturing} className="w-full h-2 bg-zinc-200 dark:bg-zinc-600 rounded-lg appearance-none cursor-pointer accent-blue-600 dark:accent-blue-500 disabled:opacity-50"/>
                                         </div>
                                         <div>
-                                            <label htmlFor="interval-slider" className="flex justify-between text-sm font-medium text-zinc-300 mb-1"><span>冷却时间</span><span>{autoCaptureInterval.toFixed(1)}s</span></label>
-                                            <input id="interval-slider" type="range" min="0.5" max="10" step="0.5" value={autoCaptureInterval} onChange={(e) => setAutoCaptureInterval(parseFloat(e.target.value))} disabled={isAutoCapturing} className="w-full h-2 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-blue-500 disabled:opacity-50"/>
+                                            <label htmlFor="max-size-slider" className="flex justify-between text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1"><span>最大对象尺寸</span><span className="font-mono">{Math.round(autoCaptureMaxSize * 100)}%</span></label>
+                                            <input id="max-size-slider" type="range" min="0.05" max="0.95" step="0.05" value={autoCaptureMaxSize} onChange={(e) => setAutoCaptureMaxSize(parseFloat(e.target.value))} disabled={isAutoCapturing} className="w-full h-2 bg-zinc-200 dark:bg-zinc-600 rounded-lg appearance-none cursor-pointer accent-blue-600 dark:accent-blue-500 disabled:opacity-50"/>
                                         </div>
-                                        <button onClick={() => setIsAutoCapturing(p => !p)} disabled={!cocoModel} className={`w-full px-4 py-2 font-semibold rounded-lg shadow-md flex items-center justify-center gap-2 disabled:bg-slate-600 transition-colors text-white ${isAutoCapturing ? 'bg-amber-600 hover:bg-amber-700' : 'bg-blue-600 hover:bg-blue-700'}`}>
+                                        <div>
+                                            <label htmlFor="interval-slider" className="flex justify-between text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1"><span>冷却时间</span><span className="font-mono">{autoCaptureInterval.toFixed(1)}s</span></label>
+                                            <input id="interval-slider" type="range" min="0.5" max="10" step="0.5" value={autoCaptureInterval} onChange={(e) => setAutoCaptureInterval(parseFloat(e.target.value))} disabled={isAutoCapturing} className="w-full h-2 bg-zinc-200 dark:bg-zinc-600 rounded-lg appearance-none cursor-pointer accent-blue-600 dark:accent-blue-500 disabled:opacity-50"/>
+                                        </div>
+                                        <button onClick={() => setIsAutoCapturing(p => !p)} disabled={!cocoModel} className={`w-full px-4 py-2 font-semibold rounded-lg shadow-sm flex items-center justify-center gap-2 disabled:bg-slate-600 transition-colors text-white ${isAutoCapturing ? 'bg-amber-600 hover:bg-amber-700' : 'bg-blue-600 hover:bg-blue-700'}`}>
                                             {isAutoCapturing ? <SpinnerIcon /> : <RobotIcon/>}
                                             {isAutoCapturing ? (isDetecting ? '检测中...' : '暂停自动捕获') : '开始自动捕获'}
                                         </button>

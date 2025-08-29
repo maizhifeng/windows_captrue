@@ -1,5 +1,3 @@
-
-
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { api } from './utils/api.tsx';
 import { SpinnerIcon } from './icons/SpinnerIcon.tsx';
@@ -117,49 +115,49 @@ const VisualQna: React.FC = () => {
 
     return (
         <div className="max-w-3xl mx-auto h-full flex flex-col justify-center">
-             <div className="text-center mb-6">
-                <h2 className="text-2xl font-bold text-zinc-100">视觉问答</h2>
-                <p className="mt-2 max-w-xl mx-auto text-zinc-400">从您的屏幕捕获一帧，并就其内容向 AI 提问。</p>
+             <div className="text-center mb-8">
+                <h2 className="text-2xl font-bold text-zinc-800 dark:text-zinc-200">视觉问答</h2>
+                <p className="mt-2 max-w-xl mx-auto text-zinc-600 dark:text-zinc-400">从您的屏幕捕获一帧，并就其内容向 AI 提问。</p>
             </div>
 
             {/* 步骤 1: 捕获图像 */}
-            <div className="bg-zinc-800/50 p-4 rounded-xl border border-zinc-700">
-                <h3 className="text-lg font-semibold text-zinc-200 mb-4 flex items-center gap-2">
+            <div className="bg-zinc-50 dark:bg-zinc-900 p-4 rounded-xl border border-zinc-200/80 dark:border-zinc-800 shadow-sm">
+                <h3 className="text-lg font-semibold text-zinc-800 dark:text-zinc-200 mb-4 flex items-center gap-2">
                     <CameraIcon className="h-6 w-6" />
                     1. 捕获图像
                 </h3>
-                <div className="relative aspect-video bg-black rounded-md overflow-hidden border border-zinc-700 flex items-center justify-center">
+                <div className="relative aspect-video bg-zinc-100 dark:bg-zinc-800 rounded-md overflow-hidden border border-zinc-200 dark:border-zinc-700 flex items-center justify-center">
                     {capturedFrame ? (
                         <img src={capturedFrame} alt="捕获的帧" className="w-full h-full object-contain" />
                     ) : (
                         <video ref={videoRef} className={`w-full h-full object-contain ${isCapturing ? 'opacity-100' : 'opacity-0'}`} playsInline muted />
                     )}
                     {!isCapturing && !capturedFrame && (
-                        <div className="absolute inset-0 flex flex-col items-center justify-center text-zinc-400 p-4 text-center">
-                            <EyeIcon className="h-10 w-10 mb-2 text-zinc-500"/>
-                            <p className="font-semibold text-zinc-300">开始屏幕共享以捕获一帧。</p>
+                        <div className="absolute inset-0 flex flex-col items-center justify-center text-zinc-500 dark:text-zinc-400 p-4 text-center">
+                            <EyeIcon className="h-10 w-10 mb-2 text-zinc-400 dark:text-zinc-500"/>
+                            <p className="font-semibold text-zinc-700 dark:text-zinc-200">开始屏幕共享以捕获一帧。</p>
                         </div>
                     )}
                 </div>
                 <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {!isCapturing && !capturedFrame && (
-                        <button onClick={startCapture} className="w-full sm:col-span-2 px-4 py-2.5 font-semibold text-white rounded-lg shadow-md bg-blue-600 hover:bg-blue-700 flex items-center justify-center gap-2 transition-colors">开始屏幕共享</button>
+                        <button onClick={startCapture} className="w-full sm:col-span-2 px-4 py-2.5 font-semibold text-white rounded-lg shadow-sm bg-blue-600 hover:bg-blue-700 flex items-center justify-center gap-2 transition-colors">开始屏幕共享</button>
                     )}
                     {isCapturing && (
                         <>
-                        <button onClick={captureFrame} className="w-full px-4 py-2.5 font-semibold text-white rounded-lg shadow-md bg-blue-600 hover:bg-blue-700 flex items-center justify-center gap-2 transition-colors">捕获帧</button>
-                        <button onClick={stopCapture} className="w-full px-4 py-2.5 font-semibold rounded-lg shadow-md bg-zinc-700 hover:bg-zinc-600 transition-colors">取消</button>
+                        <button onClick={captureFrame} className="w-full px-4 py-2.5 font-semibold text-white rounded-lg shadow-sm bg-blue-600 hover:bg-blue-700 flex items-center justify-center gap-2 transition-colors">捕获帧</button>
+                        <button onClick={stopCapture} className="w-full px-4 py-2.5 font-semibold rounded-lg shadow-sm bg-zinc-200 hover:bg-zinc-300 text-zinc-800 dark:bg-zinc-700 dark:hover:bg-zinc-600 dark:text-zinc-100 transition-colors">取消</button>
                         </>
                     )}
                     {capturedFrame && (
-                        <button onClick={handleRecapture} className="w-full sm:col-span-2 px-4 py-2.5 font-semibold rounded-lg shadow-md bg-zinc-700 hover:bg-zinc-600 transition-colors">捕获另一帧</button>
+                        <button onClick={handleRecapture} className="w-full sm:col-span-2 px-4 py-2.5 font-semibold rounded-lg shadow-sm bg-zinc-200 hover:bg-zinc-300 text-zinc-800 dark:bg-zinc-700 dark:hover:bg-zinc-600 dark:text-zinc-100 transition-colors">捕获另一帧</button>
                     )}
                 </div>
             </div>
 
             {/* 步骤 2: 提问 */}
-            <div className={`bg-zinc-800/50 p-4 rounded-xl border border-zinc-700 mt-6 space-y-4 transition-opacity duration-500 ${!capturedFrame ? 'opacity-40 cursor-not-allowed' : ''}`}>
-                 <h3 className="text-lg font-semibold text-zinc-200 flex items-center gap-2">
+            <div className={`bg-zinc-50 dark:bg-zinc-900 p-4 rounded-xl border border-zinc-200/80 dark:border-zinc-800 shadow-sm mt-6 space-y-4 transition-opacity duration-500 ${!capturedFrame ? 'opacity-40 cursor-not-allowed' : ''}`}>
+                 <h3 className="text-lg font-semibold text-zinc-800 dark:text-zinc-200 flex items-center gap-2">
                     <TextIcon className="h-6 w-6" />
                     2. 提出问题
                 </h3>
@@ -169,21 +167,21 @@ const VisualQna: React.FC = () => {
                     disabled={!capturedFrame || isAsking}
                     placeholder="例如，巴士是什么颜色的？或者，描述一下这个场景。"
                     rows={3}
-                    className="w-full bg-zinc-800 text-white text-base px-4 py-2.5 rounded-lg border border-zinc-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors disabled:opacity-70"
+                    className="w-full bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-200 text-base px-4 py-2.5 rounded-lg border border-zinc-300 dark:border-zinc-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors disabled:opacity-70"
                 />
-                <button onClick={handleAskQuestion} disabled={!capturedFrame || isAsking || !question.trim()} className="w-full px-6 py-3 font-semibold text-white rounded-lg shadow-lg bg-blue-600 hover:bg-blue-700 flex items-center justify-center gap-3 disabled:bg-slate-700 disabled:cursor-not-allowed transition-all">
+                <button onClick={handleAskQuestion} disabled={!capturedFrame || isAsking || !question.trim()} className="w-full px-6 py-3 font-semibold text-white rounded-lg shadow-sm bg-blue-600 hover:bg-blue-700 flex items-center justify-center gap-3 disabled:bg-slate-400 dark:disabled:bg-slate-600 disabled:cursor-not-allowed transition-all">
                     {isAsking ? <SpinnerIcon /> : null}
                     {isAsking ? '思考中...' : '询问 AI'}
                 </button>
                 {/* AI 回答显示区域 */}
                 {answer && (
-                    <div className="pt-4 border-t border-zinc-700/80 space-y-2">
-                        <h4 className="font-semibold text-zinc-300">AI 回答:</h4>
-                        <div className="bg-zinc-900/50 p-4 border border-zinc-700 rounded-lg text-zinc-300 whitespace-pre-wrap text-sm">{answer}</div>
+                    <div className="pt-4 border-t border-zinc-200 dark:border-zinc-700 space-y-2">
+                        <h4 className="font-semibold text-zinc-700 dark:text-zinc-300">AI 回答:</h4>
+                        <div className="bg-zinc-100 dark:bg-zinc-800/50 p-4 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200 whitespace-pre-wrap text-sm">{answer}</div>
                     </div>
                 )}
             </div>
-            {error && <div className="bg-amber-900/50 border border-amber-700 text-amber-300 p-4 rounded-lg mt-6" role="alert">{error}</div>}
+            {error && <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-500/50 text-red-800 dark:text-red-300 p-4 rounded-lg mt-6" role="alert">{error}</div>}
         </div>
     );
 };

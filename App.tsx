@@ -1,9 +1,9 @@
-
-
 import React, { useState, useEffect, useCallback } from 'react';
 import Sidebar from './components/Sidebar.tsx';
 import Studio from './components/Studio.tsx';
 import { StudioProvider } from './components/contexts/StudioContext.tsx';
+import { ThemeProvider } from './components/contexts/ThemeContext.tsx';
+import { GoogleAuthProvider } from './components/contexts/GoogleAuthContext.tsx';
 import LiveAnalysis from './components/LiveAnalysis.tsx';
 import ManageSamples from './components/ManageSamples.tsx';
 import TrainModel from './components/TrainModel.tsx';
@@ -11,6 +11,7 @@ import Settings from './components/Settings.tsx';
 import VisualQna from './components/VisualQna.tsx';
 import { SpinnerIcon } from './components/icons/SpinnerIcon.tsx';
 import { api, StoredTrainingSample } from './components/utils/api.tsx';
+import { db } from './components/utils/db.tsx';
 import BackendConnectionManager from './components/BackendConnectionManager.tsx';
 import MainPanelHeader from './components/MainPanelHeader.tsx';
 
@@ -35,6 +36,8 @@ const App: React.FC = () => {
 
     // 后端服务器 URL，从 localStorage 读取
     const [serverUrl, setServerUrl] = useState(() => localStorage.getItem('serverUrl') || '');
+    // Google Client ID, from localStorage
+    const [googleClientId, setGoogleClientId] = useState(() => localStorage.getItem('googleClientId') || '255234082372-6r0vjlt84n7k974tcjlvb5ash2t17mq6.apps.googleusercontent.com');
     // 后端是否准备就绪并可连接
     const [isBackendReady, setIsBackendReady] = useState(false);
     
@@ -78,20 +81,36 @@ const App: React.FC = () => {
     }, [checkConnection]);
 
     /**
-     * 从后端服务器加载初始数据（样本和模型信息）。
+     * 从本地 IndexedDB 加载样本。
      */
-    const loadData = useCallback(async () => {
+    const loadLocalSamples = useCallback(async () => {
+        setDataStatus('正在从本地数据库加载样本...');
+        try {
+            const localSamples = await db.getAllSamples();
+            const uiSamples = localSamples.map(s => ({
+                id: s.id,
+                boxes: s.boxes,
+                imageUrl: URL.createObjectURL(s.imageDataBlob)
+            }));
+            setSamples(uiSamples);
+            setDataStatus(`准备就绪。已加载 ${uiSamples.length} 个本地样本。`);
+        } catch(e) {
+            console.error('从 IndexedDB 加载样本失败', e);
+            setError('无法从本地数据库加载样本。请检查浏览器权限。');
+            setDataStatus('加载本地数据时出错。');
+        }
+    }, []);
+
+    /**
+     * 从后端服务器加载数据（模型信息）。
+     */
+    const loadBackendData = useCallback(async () => {
         if (!isBackendReady) return;
 
         setIsLoading(true);
-        setDataStatus('正在从服务器加载数据集和模型信息...');
+        setDataStatus('正在从服务器加载模型信息...');
         try {
-            const [storedSamples, modelInfo] = await Promise.all([
-                api.getSamples(),
-                api.getModelInfo().catch(() => ({ classNames: [] })) // 如果模型信息不存在，则优雅地处理
-            ]);
-
-            setSamples(storedSamples);
+            const modelInfo = await api.getModelInfo().catch(() => ({ classNames: [] }));
 
             // 检查是否存在自定义模型
             if (modelInfo.classNames && modelInfo.classNames.length > 0) {
@@ -101,8 +120,6 @@ const App: React.FC = () => {
                 setHasCustomModel(false);
                 setSavedModelInfo('在服务器上未找到自定义模型。');
             }
-            
-            setDataStatus(`准备就绪。已加载 ${storedSamples.length} 个样本。`);
         } catch (e) {
             console.error('从服务器加载数据失败', e);
             setError('无法从服务器加载数据。请检查连接和服务器状态。');
@@ -112,17 +129,29 @@ const App: React.FC = () => {
         }
     }, [isBackendReady]);
 
-    // 当后端准备就绪时，加载数据
+    // 在挂载时加载本地样本
     useEffect(() => {
-        loadData();
-    }, [loadData]);
+        loadLocalSamples();
+    }, [loadLocalSamples]);
+
+    // 当后端准备就绪时，加载后端数据
+    useEffect(() => {
+        if (isBackendReady) {
+            loadBackendData();
+        } else {
+            // 如果后端断开连接，则重置模型信息
+            setHasCustomModel(false);
+            setSavedModelInfo(null);
+            setIsLoading(false); // 确保在没有后端时加载状态为 false
+        }
+    }, [isBackendReady, loadBackendData]);
 
 
     /**
      * 根据当前模式渲染主内容区域。
      */
     const renderContent = () => {
-        const backendRequiredModes: Mode[] = ['dataset', 'training', 'vqa'];
+        const backendRequiredModes: Mode[] = ['training', 'vqa'];
         // 如果当前模式需要后端但后端未准备好，则显示连接管理器
         if (backendRequiredModes.includes(mode) && !isBackendReady) {
             return <BackendConnectionManager 
@@ -135,7 +164,7 @@ const App: React.FC = () => {
         // 如果正在加载数据，则显示加载指示器
         if (isLoading && mode !== 'settings' && isBackendReady) {
              return (
-                <div className="flex flex-col items-center justify-center h-full text-center p-8 text-zinc-400">
+                <div className="flex flex-col items-center justify-center h-full text-center p-8 text-zinc-500 dark:text-zinc-400">
                     <SpinnerIcon />
                     <p className="mt-4">{dataStatus}</p>
                 </div>
@@ -150,6 +179,7 @@ const App: React.FC = () => {
                 return <ManageSamples 
                             samples={samples}
                             setSamples={setSamples}
+                            setMode={setMode}
                         />;
             case 'training':
                 return <TrainModel
@@ -164,6 +194,8 @@ const App: React.FC = () => {
                             setServerUrl={setServerUrl}
                             isBackendReady={isBackendReady}
                             checkConnection={checkConnection}
+                            googleClientId={googleClientId}
+                            setGoogleClientId={setGoogleClientId}
                         />;
             default:
                 return null;
@@ -171,32 +203,36 @@ const App: React.FC = () => {
     };
 
     return (
-        <StudioProvider>
-            <div className="h-screen font-sans antialiased flex text-zinc-300 bg-zinc-950 p-3 gap-3">
-                <Sidebar 
-                    isCollapsed={isSidebarCollapsed} 
-                    onToggle={() => setIsSidebarCollapsed(p => !p)} 
-                    mode={mode} 
-                    setMode={setMode} 
-                />
-                <main className="flex-1 flex flex-col min-w-0 bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
-                    <MainPanelHeader mode={mode} />
-                    <div className="flex-grow p-6 relative overflow-y-auto">
-                        {/* 如果后端已连接但仍有错误，显示一个非阻塞的错误提示 */}
-                        {isBackendReady && error && mode !== 'settings' && (
-                            <div className="bg-amber-900/50 border border-amber-700 text-amber-300 p-4 rounded-lg mb-4 flex flex-col sm:flex-row justify-between items-center gap-4" role="alert">
-                                <span>{error}</span>
+        <ThemeProvider>
+            <GoogleAuthProvider clientId={googleClientId}>
+                <StudioProvider>
+                    <div className="h-screen font-sans antialiased flex text-zinc-900 dark:text-zinc-200 p-2 sm:p-3 gap-2 sm:gap-3">
+                        <Sidebar 
+                            isCollapsed={isSidebarCollapsed} 
+                            onToggle={() => setIsSidebarCollapsed(p => !p)} 
+                            mode={mode} 
+                            setMode={setMode} 
+                        />
+                        <main className="flex-1 flex flex-col min-w-0 bg-zinc-50 dark:bg-zinc-900 rounded-xl border border-zinc-200/80 dark:border-zinc-800 shadow-sm overflow-hidden">
+                            <MainPanelHeader mode={mode} />
+                            <div className="flex-grow p-4 sm:p-6 relative overflow-y-auto">
+                                {/* 如果后端已连接但仍有错误，显示一个非阻塞的错误提示 */}
+                                {isBackendReady && error && mode !== 'settings' && (
+                                    <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800/50 text-amber-800 dark:text-amber-300 p-4 rounded-lg mb-4 flex flex-col sm:flex-row justify-between items-center gap-4" role="alert">
+                                        <span>{error}</span>
+                                    </div>
+                                )}
+                                {renderContent()}
                             </div>
-                        )}
-                        {renderContent()}
+                        </main>
+                        <Studio 
+                            isCollapsed={isStudioCollapsed} 
+                            onToggle={() => setIsStudioCollapsed(p => !p)} 
+                        />
                     </div>
-                </main>
-                <Studio 
-                    isCollapsed={isStudioCollapsed} 
-                    onToggle={() => setIsStudioCollapsed(p => !p)} 
-                />
-            </div>
-        </StudioProvider>
+                </StudioProvider>
+            </GoogleAuthProvider>
+        </ThemeProvider>
     );
 };
 

@@ -1,5 +1,3 @@
-
-
 import React from 'react';
 import { SettingsIcon } from '../icons/SettingsIcon.tsx';
 
@@ -40,33 +38,33 @@ const AnalysisControls: React.FC<AnalysisControlsProps> = ({
             {/* 主要操作：开始/停止捕获按钮 */}
             <button 
                 onClick={isCapturing ? onStopCapture : onStartCapture}
-                className={`px-6 py-3 font-semibold rounded-lg shadow-lg w-full text-white transition-all duration-200 transform hover:scale-[1.02] ${isCapturing ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'}`}
+                className={`px-6 py-2.5 font-semibold rounded-lg shadow-sm w-full text-white transition-all duration-200 transform hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-offset-2 dark:ring-offset-zinc-900 ${isCapturing ? 'bg-red-600 hover:bg-red-700 focus:ring-red-500' : 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500'}`}
             >
-                {isCapturing ? 'Stop Capture' : 'Start Capture'}
+                {isCapturing ? '停止捕获' : '开始捕获'}
             </button>
 
             {/* 配置部分：在捕获时禁用 */}
             <fieldset disabled={isCapturing} className="space-y-4 transition-opacity duration-300 disabled:opacity-50 disabled:cursor-not-allowed">
-                 <h3 className="text-sm font-semibold text-zinc-400 flex items-center gap-2 pt-2">
+                 <h3 className="text-sm font-semibold text-zinc-600 dark:text-zinc-400 flex items-center gap-2 pt-2">
                     <SettingsIcon className="w-4 h-4" />
-                    Configuration
+                    配置
                 </h3>
-                <div className="bg-zinc-800/50 p-4 rounded-lg border border-zinc-700 w-full flex flex-col gap-4 text-sm space-y-3">
+                <div className="bg-zinc-100 dark:bg-zinc-800/50 p-3 rounded-lg border border-zinc-200 dark:border-zinc-700 w-full flex flex-col gap-3 text-sm">
                     {/* 引擎选择 */}
                     <div className="flex items-center justify-between">
-                        <span className="text-zinc-300 font-medium">Engine:</span>
-                        <div className="flex items-center gap-2">
-                            <button disabled={!isCocoSsdReady} onClick={() => onSetDetectionEngine('frontend')} className={`px-3 py-1 rounded-md ${detectionEngine === 'frontend' ? 'bg-blue-600 text-white' : 'bg-zinc-700 hover:bg-zinc-600'} disabled:opacity-50`}>Browser</button>
-                            <button onClick={() => onSetDetectionEngine('backend')} className={`px-3 py-1 rounded-md ${detectionEngine === 'backend' ? 'bg-blue-600 text-white' : 'bg-zinc-700 hover:bg-zinc-600'}`}>Server</button>
+                        <span className="text-zinc-700 dark:text-zinc-300 font-medium">引擎:</span>
+                        <div className="flex items-center gap-1 p-0.5 bg-zinc-200 dark:bg-zinc-700 rounded-md">
+                            <button disabled={!isCocoSsdReady} onClick={() => onSetDetectionEngine('frontend')} className={`px-2 py-0.5 rounded-md text-xs font-semibold ${detectionEngine === 'frontend' ? 'bg-white dark:bg-zinc-600 shadow-sm text-blue-600 dark:text-zinc-100' : 'text-zinc-600 dark:text-zinc-300 hover:bg-white/50 dark:hover:bg-zinc-600/50'} disabled:opacity-50 transition-all`}>浏览器</button>
+                            <button onClick={() => onSetDetectionEngine('backend')} className={`px-2 py-0.5 rounded-md text-xs font-semibold ${detectionEngine === 'backend' ? 'bg-white dark:bg-zinc-600 shadow-sm text-blue-600 dark:text-zinc-100' : 'text-zinc-600 dark:text-zinc-300 hover:bg-white/50 dark:hover:bg-zinc-600/50'} transition-all`}>服务器</button>
                         </div>
                     </div>
                     {/* 模型选择 (仅限后端) */}
                     {detectionEngine === 'backend' && (
                         <div className="flex items-center justify-between">
-                            <span className="text-zinc-300 font-medium">Model:</span>
-                            <div className="flex items-center gap-2">
-                                <button onClick={() => onSetSelectedModel('coco')} className={`px-3 py-1 rounded-md ${selectedModel === 'coco' ? 'bg-blue-600 text-white' : 'bg-zinc-700 hover:bg-zinc-600'}`}>COCO</button>
-                                <button disabled={!hasCustomModel} onClick={() => onSetSelectedModel('custom')} className={`px-3 py-1 rounded-md ${selectedModel === 'custom' ? 'bg-blue-600 text-white' : 'bg-zinc-700 hover:bg-zinc-600'} disabled:opacity-50`}>Custom</button>
+                            <span className="text-zinc-700 dark:text-zinc-300 font-medium">模型:</span>
+                            <div className="flex items-center gap-1 p-0.5 bg-zinc-200 dark:bg-zinc-700 rounded-md">
+                                <button onClick={() => onSetSelectedModel('coco')} className={`px-2 py-0.5 rounded-md text-xs font-semibold ${selectedModel === 'coco' ? 'bg-white dark:bg-zinc-600 shadow-sm text-blue-600 dark:text-zinc-100' : 'text-zinc-600 dark:text-zinc-300 hover:bg-white/50 dark:hover:bg-zinc-600/50'} transition-all`}>COCO</button>
+                                <button disabled={!hasCustomModel} onClick={() => onSetSelectedModel('custom')} className={`px-2 py-0.5 rounded-md text-xs font-semibold ${selectedModel === 'custom' ? 'bg-white dark:bg-zinc-600 shadow-sm text-blue-600 dark:text-zinc-100' : 'text-zinc-600 dark:text-zinc-300 hover:bg-white/50 dark:hover:bg-zinc-600/50'} disabled:opacity-50 transition-all`}>自定义</button>
                             </div>
                         </div>
                     )}
@@ -74,18 +72,18 @@ const AnalysisControls: React.FC<AnalysisControlsProps> = ({
                 {/* 参数滑块 */}
                 <div className="space-y-4 pt-2">
                     <div>
-                        <label htmlFor="confidence" className="flex justify-between text-sm font-medium text-zinc-300 mb-2">
-                            <span>Confidence Threshold</span>
-                            <span className="font-mono">{Math.round(confidence * 100)}%</span>
+                        <label htmlFor="confidence" className="flex justify-between text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
+                            <span>置信度阈值</span>
+                            <span className="font-mono text-zinc-600 dark:text-zinc-400">{Math.round(confidence * 100)}%</span>
                         </label>
-                        <input id="confidence" type="range" min="0.2" max="0.9" step="0.05" value={confidence} onChange={(e) => onConfidenceChange(parseFloat(e.target.value))} className="w-full h-2 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-blue-500" />
+                        <input id="confidence" type="range" min="0.2" max="0.9" step="0.05" value={confidence} onChange={(e) => onConfidenceChange(parseFloat(e.target.value))} className="w-full h-2 bg-zinc-200 dark:bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-blue-600 dark:accent-blue-500" />
                     </div>
                     <div>
-                        <label htmlFor="fps" className="flex justify-between text-sm font-medium text-zinc-300 mb-2">
-                            <span>Analysis Frequency</span>
-                            <span className="font-mono">{analysisFps} FPS</span>
+                        <label htmlFor="fps" className="flex justify-between text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
+                            <span>分析频率</span>
+                            <span className="font-mono text-zinc-600 dark:text-zinc-400">{analysisFps} FPS</span>
                         </label>
-                        <input id="fps" type="range" min="1" max="30" step="1" value={analysisFps} onChange={(e) => onAnalysisFpsChange(parseInt(e.target.value, 10))} className="w-full h-2 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-blue-500" />
+                        <input id="fps" type="range" min="1" max="30" step="1" value={analysisFps} onChange={(e) => onAnalysisFpsChange(parseInt(e.target.value, 10))} className="w-full h-2 bg-zinc-200 dark:bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-blue-600 dark:accent-blue-500" />
                     </div>
                 </div>
             </fieldset>

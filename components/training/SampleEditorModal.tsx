@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { BoxData } from '../utils/api.tsx';
 import { TrashIcon } from '../icons/TrashIcon.tsx';
 import { PlusIcon } from '../icons/PlusIcon.tsx';
-import { SpinnerIcon } from '../icons/SpinnerIcon.tsx';
 import { ArrowLeftIcon } from '../icons/ArrowLeftIcon.tsx';
 import { ArrowRightIcon } from '../icons/ArrowRightIcon.tsx';
 
@@ -26,11 +25,15 @@ interface SampleEditorModalProps {
 const SampleEditorModal: React.FC<SampleEditorModalProps> = ({ session, onSave, onClose, onNavigate, canGoPrevious, canGoNext }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [error, setError] = useState<string | null>(null);
-    const [isDetecting, setIsDetecting] = useState(true); // 是否正在进行自动对象检测
     const [detectedBoxes, setDetectedBoxes] = useState<DetectedBox[]>([]); // 图像上所有框的列表（已标注或未标注）
     const [hoveredBoxIndex, setHoveredBoxIndex] = useState<number | null>(null); // 鼠标悬停的框的索引
     const [selectedBoxIndex, setSelectedBoxIndex] = useState<number | null>(null); // 当前选中的框的索引
-    const [cocoModel, setCocoModel] = useState<any>(null); // 用于浏览器端检测的模型
+    
+    // 手动绘制状态
+    const [isDrawing, setIsDrawing] = useState(false);
+    const [startPoint, setStartPoint] = useState<{ x: number, y: number } | null>(null);
+    const [currentRect, setCurrentRect] = useState<[number, number, number, number] | null>(null);
+
     // 从 localStorage 加载/保存标签列表
     const [labels, setLabels] = useState<string[]>(() => {
         try { return JSON.parse(localStorage.getItem('annotationLabels') || '["player", "enemy", "npc"]'); }
@@ -41,74 +44,18 @@ const SampleEditorModal: React.FC<SampleEditorModalProps> = ({ session, onSave, 
     // 当标签列表更新时，保存到 localStorage
     useEffect(() => { localStorage.setItem('annotationLabels', JSON.stringify(labels)); }, [labels]);
 
-    // 加载 COCO-SSD 模型
+    // 当会话改变时（即加载新样本），重置状态
     useEffect(() => {
-        async function loadModel() {
-            if (typeof cocoSsd !== 'undefined' && cocoSsd.load) {
-                try {
-                    const model = await cocoSsd.load();
-                    setCocoModel(model);
-                } catch (e) {
-                    console.error("加载 COCO-SSD 失败:", e);
-                    setError("无法加载浏览器内的检测模型。");
-                }
-            }
-        }
-        loadModel();
-    }, []);
-
-    // 当会话（即编辑的样本）或模型改变时，运行自动对象检测
-    useEffect(() => {
-        setSelectedBoxIndex(null); setHoveredBoxIndex(null);
+        setSelectedBoxIndex(null);
+        setHoveredBoxIndex(null);
         // 如果样本已经有标注，则直接加载它们
-        if (session.id !== undefined && session.boxes.length > 0) {
+        if (session.boxes.length > 0) {
             setDetectedBoxes(session.boxes.map(b => ({ box: b.box, label: b.label })));
-            setIsDetecting(false); return;
+        } else {
+            // 对于新样本，从一个空的列表开始
+            setDetectedBoxes([]);
         }
-        const runDetection = async () => {
-             // 等待模型加载完成
-            if (!session.imageData || !cocoModel) {
-                if (typeof cocoSsd !== 'undefined' && !cocoModel) {
-                    setIsDetecting(true); // 模型正在加载时显示加载动画
-                } else {
-                    setIsDetecting(false);
-                }
-                return;
-            };
-            setIsDetecting(true); setError(null);
-            
-            // 将 ImageData 转换为 Canvas 以便进行检测
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = session.imageData.width;
-            tempCanvas.height = session.imageData.height;
-            const ctx = tempCanvas.getContext('2d');
-            if(!ctx) { setIsDetecting(false); return; }
-            ctx.putImageData(session.imageData, 0, 0);
-
-            try {
-                 // 使用浏览器内的 COCO-SSD 模型进行预检测
-                const predictions = await cocoModel.detect(tempCanvas);
-                const { width, height } = tempCanvas;
-                setDetectedBoxes(predictions.map((p: any) => {
-                    const [x, y, w, h] = p.bbox;
-                    // 将像素坐标转换为归一化的 [y1, x1, y2, x2] 格式
-                    return { 
-                        box: [
-                            y / height,         // y1
-                            x / width,          // x1
-                            (y + h) / height,   // y2
-                            (x + w) / width,    // x2
-                        ] 
-                    };
-                }));
-            } catch (e) { 
-                setError("无法自动检测对象。");
-                console.error("前端检测时出错：", e);
-            }
-            finally { setIsDetecting(false); }
-        };
-        runDetection();
-    }, [session, cocoModel]);
+    }, [session]);
 
     const removeBox = (index: number) => {
         setDetectedBoxes(p => p.filter((_, i) => i !== index));
@@ -149,21 +96,31 @@ const SampleEditorModal: React.FC<SampleEditorModalProps> = ({ session, onSave, 
              const { box, label } = b; const [y1, x1, y2, x2] = box;
              const isSel = selectedBoxIndex === index, isHov = hoveredBoxIndex === index;
              if (label) { // 已标注的框
-                ctx.strokeStyle = isSel ? '#f87171' : isHov ? '#fbbf24' : '#60a5fa'; // 红, 琥珀, 蓝
+                ctx.strokeStyle = isSel ? '#dc2626' : isHov ? '#f59e0b' : '#3b82f6'; // 红, 琥珀, 蓝
                 ctx.lineWidth = isSel ? 3 : 2;
                 ctx.strokeRect(x1 * w, y1 * h, (x2 - x1) * w, (y2 - y1) * h);
-                ctx.fillStyle = isSel ? '#f87171' : '#3b82f6'; // 红, 蓝
+                ctx.fillStyle = isSel ? '#dc2626' : '#3b82f6'; // 红, 蓝
                 ctx.font = 'bold 12px sans-serif';
                 ctx.fillRect(x1 * w - 1, y1 * h - 16, ctx.measureText(label).width + 8, 16);
                 ctx.fillStyle = '#fff'; ctx.fillText(label, x1 * w + 3, y1 * h - 4);
              } else { // 未标注的框
-                ctx.strokeStyle = isSel ? '#60a5fa' : isHov ? '#cbd5e1' : '#6b7280'; // 蓝, 灰, 深灰
+                ctx.strokeStyle = isSel ? '#3b82f6' : isHov ? '#94a3b8' : '#64748b'; // 蓝, 灰, 深灰
                 ctx.lineWidth = isSel ? 3 : 1.5; ctx.setLineDash([4, 2]); // 虚线
                 ctx.strokeRect(x1 * w, y1 * h, (x2 - x1) * w, (y2 - y1) * h);
                 ctx.setLineDash([]);
              }
         });
-    }, [session.imageData, detectedBoxes, hoveredBoxIndex, selectedBoxIndex]);
+
+        // 绘制当前正在创建的框的预览
+        if (currentRect) {
+            const [y1, x1, y2, x2] = currentRect;
+            ctx.strokeStyle = '#f59e0b'; // 琥珀色
+            ctx.lineWidth = 2;
+            ctx.setLineDash([6, 3]);
+            ctx.strokeRect(x1 * w, y1 * h, (x2 - x1) * w, (y2 - y1) * h);
+            ctx.setLineDash([]);
+        }
+    }, [session.imageData, detectedBoxes, hoveredBoxIndex, selectedBoxIndex, currentRect]);
 
     // 监听容器尺寸变化并重绘 canvas
     useEffect(() => {
@@ -173,31 +130,90 @@ const SampleEditorModal: React.FC<SampleEditorModalProps> = ({ session, onSave, 
         return () => obs.disconnect();
     }, [drawCanvas]);
     
-    // 处理 canvas 上的点击事件以选择框
-    const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
-        if (!canvasRef.current) return;
+    // 获取鼠标在 canvas 上的归一化坐标
+    const getMousePos = (e: React.MouseEvent<HTMLCanvasElement>) => {
+        if (!canvasRef.current) return null;
         const rect = canvasRef.current.getBoundingClientRect();
-        const x = (e.clientX - rect.left) / rect.width;
-        const y = (e.clientY - rect.top) / rect.height;
-        for (let i = detectedBoxes.length - 1; i >= 0; i--) {
-            const [y1, x1, y2, x2] = detectedBoxes[i].box;
-            if (x >= x1 && x <= x2 && y >= y1 && y <= y2) { setSelectedBoxIndex(i); return; }
-        }
-        setSelectedBoxIndex(null); // 点击空白区域取消选择
+        return {
+            x: (e.clientX - rect.left) / rect.width,
+            y: (e.clientY - rect.top) / rect.height,
+        };
     };
-
-    // 处理 canvas 上的鼠标移动事件以高亮框
+    
+    // 处理鼠标按下事件：开始绘制
+    const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+        e.preventDefault();
+        const pos = getMousePos(e);
+        if (!pos) return;
+        setIsDrawing(true);
+        setStartPoint(pos);
+        setCurrentRect(null);
+    };
+    
+    // 处理鼠标移动事件：更新绘制预览或处理悬停效果
     const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-        if (!canvasRef.current) return;
-        const rect = canvasRef.current.getBoundingClientRect();
-        const x = (e.clientX - rect.left) / rect.width;
-        const y = (e.clientY - rect.top) / rect.height;
-        let found = false;
-        for (let i = detectedBoxes.length - 1; i >= 0; i--) {
-            const [y1, x1, y2, x2] = detectedBoxes[i].box;
-            if (x >= x1 && x <= x2 && y >= y1 && y <= y2) { setHoveredBoxIndex(i); found = true; break; }
+        const pos = getMousePos(e);
+        if (!pos) return;
+        
+        if (isDrawing && startPoint) {
+            const newRect: [number, number, number, number] = [
+                Math.min(startPoint.y, pos.y), // y1
+                Math.min(startPoint.x, pos.x), // x1
+                Math.max(startPoint.y, pos.y), // y2
+                Math.max(startPoint.x, pos.x), // x2
+            ];
+            setCurrentRect(newRect);
+        } else {
+            let found = false;
+            for (let i = detectedBoxes.length - 1; i >= 0; i--) {
+                const [y1, x1, y2, x2] = detectedBoxes[i].box;
+                if (pos.x >= x1 && pos.x <= x2 && pos.y >= y1 && pos.y <= y2) { setHoveredBoxIndex(i); found = true; break; }
+            }
+            if (!found) setHoveredBoxIndex(null);
         }
-        if (!found) setHoveredBoxIndex(null);
+    };
+    
+    // 处理鼠标抬起事件：完成绘制或选择框
+    const handleMouseUp = (e: React.MouseEvent<HTMLCanvasElement>) => {
+        if (!isDrawing || !startPoint) return;
+        
+        const endPoint = getMousePos(e);
+        setIsDrawing(false);
+        setStartPoint(null);
+        setCurrentRect(null);
+        if (!endPoint) return;
+        
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const clickThreshold = 5;
+        const movedX = Math.abs(startPoint.x - endPoint.x) * canvas.width;
+        const movedY = Math.abs(startPoint.y - endPoint.y) * canvas.height;
+        
+        if (movedX < clickThreshold && movedY < clickThreshold) {
+            // 这是单击，处理选择逻辑
+            let foundBox = false;
+            for (let i = detectedBoxes.length - 1; i >= 0; i--) {
+                const [y1, x1, y2, x2] = detectedBoxes[i].box;
+                if (endPoint.x >= x1 && endPoint.x <= x2 && endPoint.y >= y1 && endPoint.y <= y2) {
+                    setSelectedBoxIndex(i);
+                    foundBox = true;
+                    break;
+                }
+            }
+            if (!foundBox) setSelectedBoxIndex(null);
+        } else {
+            // 这是拖拽，创建一个新框
+            const newBox: DetectedBox = {
+                box: [
+                    Math.min(startPoint.y, endPoint.y),
+                    Math.min(startPoint.x, endPoint.x),
+                    Math.max(startPoint.y, endPoint.y),
+                    Math.max(startPoint.x, endPoint.x),
+                ]
+            };
+            setDetectedBoxes(prev => [...prev, newBox]);
+            setSelectedBoxIndex(detectedBoxes.length); // 选中新创建的框
+        }
     };
 
     // 为选中的框分配标签
@@ -235,57 +251,64 @@ const SampleEditorModal: React.FC<SampleEditorModalProps> = ({ session, onSave, 
     const labeledBoxCount = detectedBoxes.filter(b => b.label).length;
 
     return (
-        <div className="fixed inset-0 z-50 bg-black/80 p-4 sm:p-6 lg:p-8 flex items-center justify-center" onMouseDown={e => e.target === e.currentTarget && onClose()}>
-            <div className="w-full max-w-7xl h-full bg-zinc-900 rounded-xl border border-zinc-800 shadow-2xl p-4 flex flex-col md:flex-row gap-4" onMouseDown={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 bg-black/60 p-4 sm:p-6 lg:p-8 flex items-center justify-center" onMouseDown={e => e.target === e.currentTarget && onClose()}>
+            <div className="w-full max-w-7xl h-full bg-zinc-50 dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-2xl p-4 flex flex-col md:flex-row gap-4" onMouseDown={e => e.stopPropagation()}>
                 {/* 左侧：图像和控制 */}
                 <div className="flex-grow flex flex-col gap-4 min-h-0">
-                     <div className="relative flex-grow bg-black rounded-lg overflow-hidden border border-zinc-700 flex items-center justify-center">
-                        <canvas ref={canvasRef} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 cursor-crosshair" onClick={handleCanvasClick} onMouseMove={handleMouseMove}/>
-                        {isDetecting && (
-                            <div className="absolute inset-0 bg-zinc-900/80 flex flex-col items-center justify-center text-zinc-300 z-20">
-                                <SpinnerIcon /> <p className="mt-2">正在自动检测对象...</p>
+                     <div className="relative flex-grow bg-zinc-100 dark:bg-zinc-800/50 rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-700 flex items-center justify-center">
+                        <canvas 
+                            ref={canvasRef} 
+                            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 cursor-crosshair"
+                            onMouseDown={handleMouseDown}
+                            onMouseMove={handleMouseMove}
+                            onMouseUp={handleMouseUp}
+                            onMouseLeave={() => { if(isDrawing) { setIsDrawing(false); setStartPoint(null); setCurrentRect(null); }}}
+                        />
+                        {detectedBoxes.length === 0 && !isDrawing && (
+                             <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+                                <p className="bg-black/50 text-white text-sm px-3 py-1.5 rounded-md">点击并拖拽以绘制一个框</p>
                             </div>
                         )}
                         {/* 导航按钮 */}
-                        <button onClick={() => onNavigate('prev')} disabled={!canGoPrevious} className="absolute left-4 top-1/2 -translate-y-1/2 z-10 p-2 bg-zinc-800/50 hover:bg-zinc-800 rounded-full disabled:opacity-30 transition-all" aria-label="上一个样本"><ArrowLeftIcon className="h-6 w-6 text-white" /></button>
-                        <button onClick={() => onNavigate('next')} disabled={!canGoNext} className="absolute right-4 top-1/2 -translate-y-1/2 z-10 p-2 bg-zinc-800/50 hover:bg-zinc-800 rounded-full disabled:opacity-30 transition-all" aria-label="下一个样本"><ArrowRightIcon className="h-6 w-6 text-white" /></button>
+                        <button onClick={() => onNavigate('prev')} disabled={!canGoPrevious} className="absolute left-4 top-1/2 -translate-y-1/2 z-10 p-2 bg-zinc-100/50 hover:bg-zinc-100 dark:bg-zinc-900/50 dark:hover:bg-zinc-900 rounded-full disabled:opacity-30 transition-all shadow-md" aria-label="上一个样本"><ArrowLeftIcon className="h-6 w-6 text-zinc-800 dark:text-zinc-200" /></button>
+                        <button onClick={() => onNavigate('next')} disabled={!canGoNext} className="absolute right-4 top-1/2 -translate-y-1/2 z-10 p-2 bg-zinc-100/50 hover:bg-zinc-100 dark:bg-zinc-900/50 dark:hover:bg-zinc-900 rounded-full disabled:opacity-30 transition-all shadow-md" aria-label="下一个样本"><ArrowRightIcon className="h-6 w-6 text-zinc-800 dark:text-zinc-200" /></button>
                      </div>
                      <div className="flex flex-col sm:flex-row gap-4 flex-shrink-0">
-                        <button onClick={handleSave} disabled={labeledBoxCount === 0} className="px-4 py-2.5 font-semibold text-white rounded-lg shadow-md w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 disabled:cursor-not-allowed">保存样本 ({labeledBoxCount} 个已标注)</button>
-                        <button onClick={onClose} className="px-4 py-2.5 font-semibold rounded-lg shadow-md w-full bg-zinc-700 hover:bg-zinc-600">关闭</button>
+                        <button onClick={handleSave} disabled={labeledBoxCount === 0} className="px-4 py-2.5 font-semibold text-white rounded-lg shadow-sm w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 dark:disabled:bg-slate-600 disabled:cursor-not-allowed">保存样本 ({labeledBoxCount} 个已标注)</button>
+                        <button onClick={onClose} className="px-4 py-2.5 font-semibold rounded-lg shadow-sm w-full bg-zinc-200 hover:bg-zinc-300 text-zinc-800 dark:bg-zinc-700 dark:hover:bg-zinc-600 dark:text-zinc-100">关闭</button>
                      </div>
                 </div>
 
                 {/* 右侧：标签和对象列表 */}
                 <aside className="w-full md:w-72 flex-shrink-0 space-y-4 flex flex-col">
-                    <div className="bg-zinc-800 p-3 rounded-lg border border-zinc-700">
-                        <h4 className="font-semibold text-zinc-300 mb-2 text-sm">标签</h4>
+                    <div className="bg-zinc-100 dark:bg-zinc-800/50 p-3 rounded-lg border border-zinc-200 dark:border-zinc-700">
+                        <h4 className="font-semibold text-zinc-700 dark:text-zinc-300 mb-2 text-sm">标签</h4>
                         <form onSubmit={handleAddNewLabel} className="flex gap-2 mb-3">
-                            <input type="text" value={newLabelInput} onChange={e => setNewLabelInput(e.target.value)} placeholder="添加新标签..." className="bg-zinc-700 text-white text-sm px-3 py-2 rounded-md border border-zinc-600 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 w-full"/>
+                            <input type="text" value={newLabelInput} onChange={e => setNewLabelInput(e.target.value)} placeholder="添加新标签..." className="bg-white dark:bg-zinc-700 text-zinc-800 dark:text-zinc-200 text-sm px-3 py-2 rounded-md border border-zinc-300 dark:border-zinc-600 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 w-full"/>
                             <button type="submit" className="p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md"><PlusIcon /></button>
                         </form>
                         <div className="flex flex-wrap gap-2">
                             {labels.map(label => (
                                 <div key={label} className="relative group">
-                                    <button onClick={() => handleAssignLabel(label)} className="px-2.5 py-1 text-xs font-semibold rounded-md transition-colors bg-zinc-700 hover:bg-zinc-600 text-zinc-300">{label}</button>
+                                    <button onClick={() => handleAssignLabel(label)} className="px-2.5 py-1 text-xs font-semibold rounded-md transition-colors bg-zinc-200 hover:bg-zinc-300 text-zinc-700 dark:bg-zinc-700 dark:hover:bg-zinc-600 dark:text-zinc-200">{label}</button>
                                     <button onClick={() => handleDeleteLabel(label)} className="absolute -top-1.5 -right-1.5 bg-red-500 rounded-full h-4 w-4 text-white text-xs items-center justify-center opacity-0 group-hover:opacity-100 flex transition-opacity">&times;</button>
                                 </div>
                             ))}
                         </div>
-                        {error && <p className="text-amber-400 text-xs mt-2 text-center">{error}</p>}
+                        {error && <p className="text-amber-600 dark:text-amber-400 text-xs mt-2 text-center">{error}</p>}
                     </div>
                     
-                    <div className="bg-zinc-800 p-3 rounded-lg border border-zinc-700 flex-grow flex flex-col min-h-0">
-                        <h4 className="font-semibold text-zinc-300 mb-2 text-sm">对象 ({detectedBoxes.length})</h4>
+                    <div className="bg-zinc-100 dark:bg-zinc-800/50 p-3 rounded-lg border border-zinc-200 dark:border-zinc-700 flex-grow flex flex-col min-h-0">
+                        <h4 className="font-semibold text-zinc-700 dark:text-zinc-300 mb-2 text-sm">对象 ({detectedBoxes.length})</h4>
                         <div className="flex-grow overflow-y-auto pr-2 space-y-2 -mr-2">
-                            {!isDetecting && detectedBoxes.length === 0 && <p className="text-zinc-500 text-sm p-2 text-center">未自动检测到对象。请尝试捕获不同的帧。</p>}
+                            {detectedBoxes.length === 0 && <p className="text-zinc-500 dark:text-zinc-400 text-sm p-2 text-center">此图像中没有标注。请在左侧图像上绘制框以开始。</p>}
                             {detectedBoxes.map((b, i) => (
-                                <div key={i} className={`flex items-center justify-between p-2 rounded-md cursor-pointer transition-colors ${selectedBoxIndex === i ? 'bg-blue-900/50' : hoveredBoxIndex === i ? 'bg-zinc-700' : 'bg-zinc-800/50'}`}
+                                <div key={i} className={`flex items-center justify-between p-2 rounded-md cursor-pointer transition-colors ${selectedBoxIndex === i ? 'bg-blue-100 dark:bg-blue-900/50' : hoveredBoxIndex === i ? 'bg-zinc-200 dark:bg-zinc-700/50' : 'bg-white dark:bg-zinc-800'}`}
                                     onMouseEnter={() => setHoveredBoxIndex(i)} onMouseLeave={() => setHoveredBoxIndex(null)} onClick={() => setSelectedBoxIndex(i)}>
-                                    <span className={`text-sm font-medium capitalize ${selectedBoxIndex === i ? 'text-white' : 'text-zinc-300'}`}>
-                                        框 {i + 1}: <span className={b.label ? 'text-blue-400 font-semibold' : 'text-zinc-500'}>{b.label || '未标注'}</span>
+                                    <span className={`text-sm font-medium capitalize ${selectedBoxIndex === i ? 'text-blue-800 dark:text-blue-300' : 'text-zinc-700 dark:text-zinc-300'}`}>
+                                        框 {i + 1}: <span className={b.label ? 'text-blue-600 dark:text-blue-400 font-semibold' : 'text-zinc-500 dark:text-zinc-400'}>{b.label || '未标注'}</span>
                                     </span>
-                                    <button onClick={(e) => { e.stopPropagation(); removeBox(i); }} className="text-zinc-400 hover:text-red-400 p-1"><TrashIcon className="h-4 w-4" /></button>
+                                    <button onClick={(e) => { e.stopPropagation(); removeBox(i); }} className="text-zinc-500 dark:text-zinc-400 hover:text-red-600 dark:hover:text-red-500 p-1"><TrashIcon className="h-4 w-4" /></button>
                                 </div>
                             ))}
                         </div>

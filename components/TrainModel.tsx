@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useRef } from 'react';
 import { StoredTrainingSample, api } from './utils/api.tsx';
 import SavedModelView from './training/SavedModelView.tsx';
@@ -84,11 +82,20 @@ const TrainModel: React.FC<TrainModelProps> = ({ savedModelInfo, samples }) => {
         }
 
         setIsTraining(true);
-        setStatus("正在向服务器发送训练请求...");
+        setStatus("正在同步本地样本到服务器...");
         setTrainingProgress({ epoch: 0, loss: '0.00', accuracy: '0.00' }); 
         setError(null);
 
         try {
+            // 同步样本到后端
+            await api.clearSamples();
+            for (const sample of samples) {
+                const response = await fetch(sample.imageUrl);
+                const imageDataBlob = await response.blob();
+                await api.uploadSample(imageDataBlob, sample.boxes);
+            }
+            setStatus(`同步了 ${samples.length} 个样本。正在开始训练...`);
+
             // 调用 API 启动训练
             await api.startTraining();
             setStatus("训练已在服务器上开始。正在等待进度...");
@@ -105,9 +112,9 @@ const TrainModel: React.FC<TrainModelProps> = ({ savedModelInfo, samples }) => {
     
     return (
         <div className="max-w-2xl mx-auto h-full flex flex-col justify-center">
-            <div className="text-center mb-6">
-                <h2 className="text-2xl font-bold text-zinc-100">训练工作室</h2>
-                <p className="mt-2 max-w-xl mx-auto text-zinc-400">使用您收集的数据集训练一个自定义对象检测模型。此过程在您配置的后端服务器上运行。</p>
+            <div className="text-center mb-8">
+                <h2 className="text-2xl font-bold text-zinc-800 dark:text-zinc-200">训练工作室</h2>
+                <p className="mt-2 max-w-xl mx-auto text-zinc-600 dark:text-zinc-400">使用您收集的数据集训练一个自定义对象检测模型。此过程在您配置的后端服务器上运行。</p>
             </div>
             <div className="space-y-6">
                 <SavedModelView savedModelInfo={savedModelInfo} />
@@ -116,7 +123,7 @@ const TrainModel: React.FC<TrainModelProps> = ({ savedModelInfo, samples }) => {
                     onStartTraining={startTraining} canTrain={samples.length > 0}
                     sampleCount={samples.length}
                 />
-                {error && <p className="text-amber-400 text-sm mt-3 text-center bg-amber-900/50 border border-amber-700 p-3 rounded-lg">{error}</p>}
+                {error && <p className="text-amber-700 dark:text-amber-400 text-sm mt-4 text-center bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-500/30 p-3 rounded-lg">{error}</p>}
             </div>
         </div>
     );

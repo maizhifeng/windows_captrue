@@ -27,12 +27,18 @@ const renderApp = () => {
 const renderError = (message: string, details: string) => {
     const rootElement = document.getElementById('root');
     if (rootElement) {
+        // Basic check for dark mode preference to apply styles before React loads
+        const isDarkMode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const themeClasses = isDarkMode 
+            ? 'dark bg-zinc-950 text-zinc-200' // Dark mode classes
+            : 'bg-zinc-50 text-zinc-800';      // Light mode classes
+        
         rootElement.innerHTML = `
-            <div class="h-screen w-screen flex items-center justify-center p-4">
-                <div class="bg-red-900/50 border border-red-700 text-red-300 p-6 rounded-lg max-w-2xl text-left">
-                    <h2 class="text-xl font-bold text-red-200">应用程序错误</h2>
-                    <p class="mt-2">${message}</p>
-                    <pre class="mt-4 text-xs bg-black/30 p-2 rounded-md overflow-auto">${details}</pre>
+            <div class="h-screen w-screen flex items-center justify-center p-4 ${themeClasses}">
+                <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-500/30 text-red-800 dark:text-red-200 p-6 rounded-lg max-w-2xl text-left shadow-md">
+                    <h2 class="text-xl font-bold text-red-900 dark:text-red-100">应用程序错误</h2>
+                    <p class="mt-2 text-red-800 dark:text-red-200">${message}</p>
+                    <pre class="mt-4 text-xs bg-red-100/50 dark:bg-red-900/30 text-red-900 dark:text-red-100 p-3 rounded-md overflow-auto">${details}</pre>
                 </div>
             </div>
         `;

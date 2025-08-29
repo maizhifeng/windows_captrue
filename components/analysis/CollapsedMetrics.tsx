@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { PlayIcon } from '../icons/PlayIcon.tsx';
 import { StopIcon } from '../icons/StopIcon.tsx';
@@ -16,7 +15,7 @@ interface CollapsedMetricsProps {
 const MetricDisplay: React.FC<{ value: string; label: string; colorClassName: string; }> = ({ value, label, colorClassName }) => (
     <div>
         <span className={`font-bold text-2xl ${colorClassName}`}>{value}</span>
-        <span className="font-medium text-zinc-400 block text-xs mt-1">{label}</span>
+        <span className="font-medium text-zinc-500 dark:text-zinc-400 block text-xs mt-1">{label}</span>
     </div>
 );
 
@@ -44,22 +43,22 @@ const CollapsedMetrics: React.FC<CollapsedMetricsProps> = ({
                 <MetricDisplay 
                     value={fps.toFixed(1)} 
                     label="FPS" 
-                    colorClassName="text-green-400"
+                    colorClassName="text-green-600 dark:text-green-400"
                 />
                 <MetricDisplay 
                     value={objectCount.toString()} 
-                    label="Objects" 
-                    colorClassName="text-blue-400"
+                    label="对象" 
+                    colorClassName="text-blue-600 dark:text-blue-400"
                 />
                  <MetricDisplay 
                     value={`${Math.round(confidence * 100)}%`}
-                    label="Threshold" 
-                    colorClassName="text-amber-400"
+                    label="阈值" 
+                    colorClassName="text-amber-600 dark:text-amber-400"
                 />
                 <MetricDisplay 
                     value={analysisFps.toString()}
-                    label="Target FPS" 
-                    colorClassName="text-purple-400"
+                    label="目标FPS" 
+                    colorClassName="text-purple-600 dark:text-purple-400"
                 />
             </div>
         </div>
