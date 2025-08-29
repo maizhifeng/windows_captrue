@@ -36,14 +36,19 @@ const App: React.FC = () => {
 
     // 后端服务器 URL，从 localStorage 读取
     const [serverUrl, setServerUrl] = useState(() => localStorage.getItem('serverUrl') || '');
-    // Google Client ID, from localStorage
-    const [googleClientId, setGoogleClientId] = useState(() => localStorage.getItem('googleClientId') || '255234082372-6r0vjlt84n7k974tcjlvb5ash2t17mq6.apps.googleusercontent.com');
+    // Google Client ID, from localStorage. Allow it to be empty in the state.
+    const [googleClientId, setGoogleClientId] = useState(() => localStorage.getItem('googleClientId') || '');
     // 后端是否准备就绪并可连接
     const [isBackendReady, setIsBackendReady] = useState(false);
     
     // 侧边栏和工作室面板的折叠状态
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
     const [isStudioCollapsed, setIsStudioCollapsed] = useState(false);
+
+    // The effective client ID passed to the provider.
+    // If empty, the provider will disable Google Drive features.
+    const effectiveGoogleClientId = googleClientId;
+
 
     /**
      * 检查与后端服务器的连接。
@@ -204,7 +209,7 @@ const App: React.FC = () => {
 
     return (
         <ThemeProvider>
-            <GoogleAuthProvider clientId={googleClientId}>
+            <GoogleAuthProvider clientId={effectiveGoogleClientId}>
                 <StudioProvider>
                     <div className="h-screen font-sans antialiased flex text-zinc-900 dark:text-zinc-200 p-2 sm:p-3 gap-2 sm:gap-3">
                         <Sidebar 

@@ -25,6 +25,7 @@ const Settings: React.FC<SettingsProps> = ({ serverUrl, setServerUrl, isBackendR
     const [clientIdInput, setClientIdInput] = useState(googleClientId);
     const [status, setStatus] = useState<Status>('idle');
     const [statusMessage, setStatusMessage] = useState('');
+    const [copied, setCopied] = useState(false);
 
     const { setStudioContent } = useStudio();
     // 此页面不使用工作室面板
@@ -71,7 +72,8 @@ const Settings: React.FC<SettingsProps> = ({ serverUrl, setServerUrl, isBackendR
         setGoogleClientId(trimmedId);
         localStorage.setItem('googleClientId', trimmedId);
         // The context will re-initialize automatically. We can provide feedback.
-        alert('Google Client ID 已保存。');
+        alert('Google Client ID 已保存。页面将重新加载以应用更改。');
+        window.location.reload();
     };
 
     /**
@@ -99,6 +101,12 @@ const Settings: React.FC<SettingsProps> = ({ serverUrl, setServerUrl, isBackendR
             setStatus('error');
             setStatusMessage(finalMessage);
         }
+    };
+
+    const handleCopyOrigin = () => {
+        navigator.clipboard.writeText(window.location.origin);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2500);
     };
     
     // 根据状态返回不同的文本颜色
@@ -220,15 +228,36 @@ const Settings: React.FC<SettingsProps> = ({ serverUrl, setServerUrl, isBackendR
                  )}
                 <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 text-blue-800 dark:text-blue-300 rounded-lg text-xs border border-blue-200 dark:border-blue-500/30 space-y-2">
                     <p className="font-semibold text-sm">如何配置</p>
-                    <ol className="list-decimal list-inside space-y-1">
+                    <ol className="list-decimal list-inside space-y-3">
                         <li>前往 <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer" className="font-semibold underline hover:text-blue-600 dark:hover:text-blue-200">Google Cloud Console</a>。</li>
                         <li>创建或选择一个“Web 应用程序”类型的“OAuth 2.0 客户端 ID”。</li>
-                        <li>复制客户端 ID 并粘贴到上方的字段中。</li>
-                        <li>在“授权 JavaScript 来源”下，添加此应用的当前 URL： <br/><code className="bg-blue-100 dark:bg-blue-800/50 p-1 rounded text-blue-900 dark:text-blue-200">{window.location.origin}</code></li>
+                        <li>
+                            在“授权 JavaScript 来源”下，添加此应用的当前 URL。
+                            <div className="mt-1 flex items-center gap-2">
+                                <code className="bg-blue-100 dark:bg-blue-800/50 px-2 py-1.5 rounded text-blue-900 dark:text-blue-200 text-xs sm:text-sm flex-grow break-all">{window.location.origin}</code>
+                                <button
+                                    onClick={handleCopyOrigin}
+                                    className="px-3 py-1 text-xs font-semibold bg-zinc-200 dark:bg-zinc-700 rounded-md hover:bg-zinc-300 dark:hover:bg-zinc-600 transition-colors w-20 text-center"
+                                    aria-live="polite"
+                                >
+                                    {copied ? '已复制!' : '复制'}
+                                </button>
+                            </div>
+                        </li>
+                        <li>导航至 <strong>OAuth 同意屏幕</strong> 页面。</li>
+                        <li>将 <strong>发布状态</strong> 设置为 <strong>“测试”</strong>。</li>
+                        <li>在 <strong>测试用户</strong> 部分，点击“添加用户”并输入您自己的 Google 帐户电子邮件地址。</li>
+                        <li>返回 <strong>凭据</strong> 页面，复制您的客户端 ID 并粘贴到上方。</li>
                         <li>在 Google Cloud Console 和此处保存您的更改。</li>
                     </ol>
-                    <p className="pt-2 border-t border-blue-200/50 dark:border-blue-500/30">
-                        如果您看到 <code className="font-mono">Error 400: invalid_request</code> 错误，这几乎总是由于“授权 JavaScript 来源”与应用的 URL 不匹配。
+                    <div className="!mt-4 pt-3 border-t border-blue-200/50 dark:border-blue-500/30">
+                        <div className="p-3 bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-300 rounded-md border border-amber-200 dark:border-amber-500/30 space-y-1">
+                            <p><strong>重要提示：</strong>您需要的是<strong>客户端 ID</strong>，它是一个以 <code className="bg-amber-100 dark:bg-amber-800/50 p-1 rounded">.apps.googleusercontent.com</code> 结尾的长字符串。</p>
+                            <p>请<strong>不要</strong>点击“下载 JSON”按钮。该 JSON 文件包含客户端密钥，适用于服务器端应用程序，在此处无法使用，并会导致错误。</p>
+                        </div>
+                    </div>
+                    <p className="!mt-3 pt-3 border-t border-blue-200/50 dark:border-blue-500/30">
+                        如果您看到 <code className="font-mono">Error 400: invalid_request</code> 错误，这几乎总是由于“授权 JavaScript 来源”与应用的 URL 不匹配。如果您看到关于“不符合 Google 政策”的错误，请确保您已在 OAuth 同意屏幕中将自己添加为<strong>测试用户</strong>。
                     </p>
                 </div>
             </div>

@@ -180,8 +180,10 @@ const ManageSamples: React.FC<ManageSamplesProps> = ({ samples, setSamples, setM
         }
     }, [samples]);
 
-     /**
+    /**
      * 将样本导出到 Google Drive。
+     * 这将在用户的 Drive 中查找或创建一个名为 "sample" 的文件夹，
+     * 然后将每个样本的图像和其对应的标注 JSON 文件上传到该文件夹中。
      */
     const handleExportToDrive = useCallback(async () => {
         if (samples.length === 0) {
@@ -194,54 +196,97 @@ const ManageSamples: React.FC<ManageSamplesProps> = ({ samples, setSamples, setM
         }
 
         setIsUploadingToDrive(true);
-        setStatus(`正在打包 ${samples.length} 个样本以上传...`);
+        setStatus(`正在准备上传 ${samples.length} 个样本...`);
         setError(null);
 
         try {
-            const zip = new JSZip();
-            const imagesFolder = zip.folder("images");
-            const annotationsData = [];
-            for (const sample of samples) {
-                const response = await fetch(sample.imageUrl);
-                const blob = await response.blob();
-                const filename = `sample_${sample.id}.png`;
-                imagesFolder.file(filename, blob);
-                annotationsData.push({ image: filename, boxes: sample.boxes });
-            }
-            zip.file("annotations.json", JSON.stringify(annotationsData, null, 2));
-            const zipBlob = await zip.generateAsync({ type: "blob" });
-
-            setStatus('正在上传到 Google Drive...');
-            
             const accessToken = getAccessToken();
             if (!accessToken) throw new Error("Google 身份验证令牌无效。");
 
-            const metadata = {
-                name: 'ai-vision-dataset.zip',
-                mimeType: 'application/zip',
+            // 辅助函数，用于在 Google Drive 中查找或创建文件夹
+            const getOrCreateFolder = async (folderName: string): Promise<string> => {
+                setStatus(`正在查找或创建 Google Drive 文件夹 "${folderName}"...`);
+                
+                const query = encodeURIComponent(`name='${folderName}' and mimeType='application/vnd.google-apps.folder' and trashed=false`);
+                const searchResponse = await fetch(`https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name)`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                 if (!searchResponse.ok) {
+                    const errorBody = await searchResponse.json();
+                    throw new Error(`搜索 Drive 文件夹失败: ${errorBody.error.message}`);
+                }
+                const searchResult = await searchResponse.json();
+
+                if (searchResult.files && searchResult.files.length > 0) {
+                    return searchResult.files[0].id; // 找到文件夹
+                } else {
+                    // 未找到，创建文件夹
+                    const folderMetadata = { name: folderName, mimeType: 'application/vnd.google-apps.folder' };
+                    const createResponse = await fetch('https://www.googleapis.com/drive/v3/files', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${accessToken}`,
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(folderMetadata),
+                    });
+                     if (!createResponse.ok) {
+                        const errorBody = await createResponse.json();
+                        throw new Error(`创建 Drive 文件夹失败: ${errorBody.error.message}`);
+                    }
+                    const newFolder = await createResponse.json();
+                    return newFolder.id;
+                }
             };
             
-            const formData = new FormData();
-            formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-            formData.append('file', zipBlob);
+            const folderId = await getOrCreateFolder('sample');
 
-            const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${accessToken}`,
-                },
-                body: formData,
-            });
+            // 辅助函数，用于上传单个文件
+            const uploadFile = async (filename: string, content: Blob, parentId: string) => {
+                 const fileMetadata = { name: filename, parents: [parentId] };
+                 const form = new FormData();
+                 form.append('metadata', new Blob([JSON.stringify(fileMetadata)], { type: 'application/json' }));
+                 form.append('file', content, filename);
 
-            if (!response.ok) {
-                const errorBody = await response.json();
-                throw new Error(`Google Drive 上传失败: ${errorBody.error.message}`);
+                 const uploadResponse = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+                     method: 'POST',
+                     headers: { 'Authorization': `Bearer ${accessToken}` },
+                     body: form,
+                 });
+                 if (!uploadResponse.ok) {
+                     const errorBody = await uploadResponse.json();
+                     throw new Error(`上传文件 ${filename} 失败: ${errorBody.error.message}`);
+                 }
+            };
+
+            // 遍历样本并上传每个文件
+            for (let i = 0; i < samples.length; i++) {
+                const sample = samples[i];
+                setStatus(`正在上传样本 ${i + 1} / ${samples.length} (ID: ${sample.id})...`);
+
+                // 上传图像
+                const imageResponse = await fetch(sample.imageUrl);
+                const imageBlob = await imageResponse.blob();
+                const imageFilename = `sample_${sample.id}.png`;
+                await uploadFile(imageFilename, imageBlob, folderId);
+                
+                // 如果有标注，则上传标注 JSON
+                if (sample.boxes.length > 0) {
+                    const annotationFilename = `sample_${sample.id}.json`;
+                    const annotationContent = JSON.stringify({ image: imageFilename, boxes: sample.boxes }, null, 2);
+                    const annotationBlob = new Blob([annotationContent], { type: 'application/json' });
+                    await uploadFile(annotationFilename, annotationBlob, folderId);
+                }
             }
 
-            setStatus('成功上传到 Google Drive！');
+            setStatus(`成功将文件上传到 Google Drive 文件夹 "sample"！`);
         } catch (e) {
             const message = e instanceof Error ? e.message : "发生未知错误";
-            setError(`导出到 Google Drive 失败: ${message}`);
+            if (message.includes("Google Drive API has not been used")) {
+                setError(`导出失败: Google Drive API 尚未在您的项目中启用。\n\n**解决方案:**\n1. 访问以下链接启用 API：\nhttps://console.developers.google.com/apis/api/drive.googleapis.com/overview\n2. 确保您选择了正确的 Google Cloud 项目。\n3. 点击“启用”按钮。\n4. 等待几分钟，然后重试导出。`);
+            } else {
+                setError(`导出到 Google Drive 失败: ${message}`);
+            }
             setStatus('导出失败。');
             console.error(e);
         } finally {
